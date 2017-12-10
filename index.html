@@ -19,8 +19,8 @@
 			a:hover { color: #0080ff; }
 
 			canvas { pointer-events:none; z-index:10; }
-
-			#d { text-align:center; margin:1em 0 -7.5em 0; z-index:1000; position:relative; display:block }
+			
+			#debug { text-align:center; margin:2em 0 -7.5em 0; z-index:100; position:relative; display:block }
 			.button { background:orange; color:#fff; padding:0.2em 0.5em; cursor:pointer }
 			.inactive { background:#999; color:#eee }
 
@@ -29,55 +29,109 @@
 	</head>
 
 	<body>
-		<div id="d">
-			<p><a href="http://threejs.org">Three.js</a> cube mapping demo
-
-			<p>Walt Disney head by <a href="http://davidoreilly.com/post/18087489343/disneyhead" target="_blank" rel="noopener">David OReilly</a>
-			<p>Texture by <a href="http://www.humus.name/index.php?page=Textures" target="_blank" rel="noopener">Humus</a>
+		<div id="debug">
+			<p id="mousePosition"></p>
+			<p id="cumulatedFrameTime"></p>
 		</div>
+		<div id="points">
+		Point: 0
+		</div>
+		
 
+		
 		<script src="build/three.js"></script>
 		<script src="examples/js/loaders/BinaryLoader.js"></script>
 		<script src="examples/js/Detector.js"></script>
 		<script src="examples/js/libs/stats.min.js"></script>
 
 		<script>
-
+			// initializing variables
 			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
-
+			
+			// webGL stuff
 			var container, stats;
-
 			var camera, scene, renderer;
-
 			var mesh, geometry;
-
 			var loader;
-
 			var pointLight;
 
 			var mouseX = 0;
 			var mouseY = 0;
+			var mousePosition = new THREE.Vector3( );
 
 			var windowHalfX = window.innerWidth / 2;
 			var windowHalfY = window.innerHeight / 2;
-			const TILE_SIZE = 2;
 			
+			// DOMs
+			var pointsDOM;
+			var mousePositionDOM;
+			var cumulatedFrameTimeDOM;
+
+			
+			// materials
+			var matAttackMissile = new THREE.MeshPhongMaterial( { color: 0xa9a9a9, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // dark grey
+			var matDefendMissile = new THREE.MeshPhongMaterial( { color: 0xd3d3d3, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // light grey
+			var matBattery = new THREE.MeshPhongMaterial( { color: 0xDEB887, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } );
+			var matCity = new THREE.MeshBasicMaterial( {color: 0xDAA520 , wireframe:true} );
+			
+			// game const
+			const TILE_SIZE = 10;
+			const ATTACKSTEPTIME = 1000; // drop missile per 3 sec
+			const ATTACKSPEED = 5000; // 5 seconds from top to bottom
+			const SCREEN_Z = 0; // z value for the plane
+			const SCREEN_TOP = 800; // screen top 800
+			const SCREEN_BOTTOM = -1000; // screen bottom -1000
+			const SCREEN_LEFT = -1300; // screen BORDERLEFT -1300
+			const SCREEN_RIGHT = 1300; // screen BORDERIGHT 1300
+
 			// game variables
-			var gameover = false;
+			var gameOver = false;
+			var startTime = Date.now(); //timestamp
+			var frameTime = 0; // ms
+			var cumulatedFrameTime = 0 //ms
+			var _lastFrameTime = Date.now(); //timestamp
 			
+			var currentPoints = 0; // score keeping
+			
+			var attackMissiles = []; // descending missiles
+			var defendMissiles = []; // ascending missiles
+			//
+			
+			/* start classes */
 			document.addEventListener('mousemove', onDocumentMouseMove, false);
 
-			init();
-			animate();
+			start();
+			
+			function start() {	
+				pointsDOM = document.getElementById("points");
+				mousePositionDOM = document.getElementById("mousePosition");
+				cumulatedFrameTimeDOM = document.getElementById("cumulatedFrameTime");
 
+				init();
+				animate();
+			}
+			
+			// add points
+			function addPoints(n) {
+				currentPoints += n;
+				pointsDOM.innerHTML = "Points: " + Tetris.currentPoints;
+			} // end add points
+			
+			// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/random
+			function getRandomInt(min, max) {
+			  min = Math.ceil(min);
+			  max = Math.floor(max);
+			  return Math.floor(Math.random() * (max - min)) + min; //The maximum is exclusive and the minimum is inclusive
+			}
+			
 			function init() {
 				
 				container = document.createElement( 'div' );
 				document.body.appendChild( container );
 				// create camera
-				camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 5000 );
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 5000 );
 				camera.position.z = 2000;
-				camera.position.y = 1000;
+				camera.position.y = 500; //1000
 
 				camera.isPerspectiveCamera = false;
 
@@ -101,7 +155,7 @@
 				var ambient = new THREE.AmbientLight( 0xffffff );
 				scene.add( ambient );
 
-				pointLight = new THREE.PointLight( 0xffffff, 2 );
+				pointLight = new THREE.PointLight( 0xffffff, 1 );
 				camera.add( pointLight );
 				scene.add( pointLight );
 
@@ -123,10 +177,11 @@
 
 				// load obj
 
-				loader = new THREE.BinaryLoader();
-				loader.load( "examples/obj/walt/WaltHead_bin.js", function( geometry ) { createScene( geometry ) } );
+				//loader = new THREE.BinaryLoader();
+				//loader.load( "examples/obj/walt/WaltHead_bin.js", function( geometry ) { createScene( geometry ) } );
 				//
-
+				var geometry;
+				createScene(geometry);
 				window.addEventListener( 'resize', onWindowResize, false );
 
 			}
@@ -146,26 +201,24 @@
 			function createScene( geometry ) {
 
 				// add models to the scene
-				var matBattery = new THREE.MeshPhongMaterial( { color: 0xfff000, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } );
-				var matCity = new THREE.MeshBasicMaterial( {color: 0xffff00 , wireframe:true} );
-
 				var s = 5;
 				
 				// batteries
+				geometry =  new THREE.CylinderGeometry( 1, TILE_SIZE*3, TILE_SIZE*3, 4 );
 				var batteryXPos = [-900, 0 ,900];
 				for (var i=0; i<batteryXPos.length; i++) {
 					var mesh = new THREE.Mesh( geometry, matBattery );
-					mesh.position.set(batteryXPos[i],-600,-100);
+					mesh.position.set(batteryXPos[i],-600,0);
 					mesh.scale.x = mesh.scale.y = mesh.scale.z = s;
 					scene.add( mesh );
 				}
 				
 				// cities: https://stackoverflow.com/questions/26418591/how-to-make-a-rectangular-pyramid-in-three-js-r68
-				var cityXPos = [-700, -450, -200, 200, 450, 700];
-				var geometry = new THREE.CylinderGeometry( 1, TILE_SIZE*3, TILE_SIZE*3, 4 );
+				var cityXPos = [-600, -450, -300, 300, 450, 600];
+				geometry = new THREE.BoxGeometry( 20, 20, 20 );
 				for (var i=0; i<cityXPos.length; i++) {
 					var mesh = new THREE.Mesh( geometry, matCity );
-					mesh.position.set(cityXPos[i],-600,-100);
+					mesh.position.set(cityXPos[i],-600,0);
 					mesh.scale.x = mesh.scale.y = mesh.scale.z = s;
 					scene.add( mesh );
 				}
@@ -176,17 +229,58 @@
 				// view rotation with mouse move 
 				mouseX = ( event.clientX - windowHalfX ) * 4;
 				mouseY = ( event.clientY - windowHalfY ) * 4;
+				
+				// get mouse position world coordination
+				// https://stackoverflow.com/questions/13055214/mouse-canvas-x-y-to-three-js-world-x-y-z
+				var vector = new THREE.Vector3();
+				vector.set(
+					( event.clientX / window.innerWidth ) * 2 - 1,
+					- ( event.clientY / window.innerHeight ) * 2 + 1,
+					0.5 );
+
+				vector.unproject( camera );
+				var dir = vector.sub( camera.position ).normalize();
+				var distance = - camera.position.z / dir.z;
+				mousePosition = camera.position.clone().add( dir.multiplyScalar( distance ) );
 
 			}
 
-			//
+			// animate for each frame
+			// http://www.smashinglabs.pl/3d-tetris-with-three-js-tutorial-part-1
 
 			function animate() {
+                var currentTime = Date.now();
+				frameTime = currentTime - _lastFrameTime;
+				_lastFrameTime = currentTime;
+				cumulatedFrameTime += frameTime;
+				
+				while(cumulatedFrameTime > ATTACKSTEPTIME) {
+					cumulatedFrameTime -= ATTACKSTEPTIME;
 
-				requestAnimationFrame( animate );
+					// every step time, add new geometry
+					var geometry = new THREE.SphereGeometry( 30, 16, 16 );
+					geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.5, 1.0 ) ); // make it ellipsoid
+					var attackMissile = new THREE.Mesh( geometry, matAttackMissile );
+					attackMissile.userData.startPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
+																		SCREEN_TOP, SCREEN_Z);
+					attackMissile.userData.endPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
+																		SCREEN_BOTTOM, SCREEN_Z);
+					
+					attackMissile.position.set(attackMissile.userData.startPt.x, attackMissile.userData.startPt.y, attackMissile.userData.startPt.z);
+					
+					// TODO rotate the mesh
+					//TODO add particle smoke after it
+					attackMissiles.push(attackMissile);
+					scene.add( attackMissile );
+					//console.log(attackMissiles);
 
+				}
+		
+		
 				render();
 				stats.update();
+				if(!gameOver) requestAnimationFrame( animate );
+
 				
 			}
 
@@ -197,8 +291,10 @@
 				//pointLight.position.x = 1500 * Math.cos( timer );
 				//pointLight.position.z = 1500 * Math.sin( timer );
 
-				camera.position.x += ( mouseX - camera.position.x ) * .05;
-				camera.position.y += ( - mouseY - camera.position.y ) * .05;
+				//camera.position.x += ( mouseX - camera.position.x ) * .05;
+				//camera.position.y += ( - mouseY - camera.position.y ) * .05;
+				mousePositionDOM.innerHTML = "x: " + mousePosition.x + " y: " + mousePosition.y;
+				cumulatedFrameTimeDOM.innerHTML = "cumulatedFrameTime: " + cumulatedFrameTime;
 
 				camera.lookAt( scene.position );
 
