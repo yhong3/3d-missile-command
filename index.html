@@ -78,11 +78,15 @@
 			const TILE_SIZE = 10;
 			const ATTACKSTEPTIME = 1000; // drop missile per 3 sec
 			const ATTACKSPEED = 5; // 10*1000 = 10px/s
+			const DEFENDSPEED = 50;
+			
 			const SCREEN_Z = 0; // z value for the plane
 			const SCREEN_TOP = 800; // screen top 800
 			const SCREEN_BOTTOM = -600; // screen bottom -1000
 			const SCREEN_LEFT = -1300; // screen BORDERLEFT -1300
 			const SCREEN_RIGHT = 1300; // screen BORDERIGHT 1300
+			
+			var batteryXPos = [-900, 0 ,900];
 
 			// game variables
 			var gameOver = false;
@@ -99,7 +103,7 @@
 			
 			/* start classes */
 			document.addEventListener('mousemove', onDocumentMouseMove, false);
-
+			document.addEventListener('click', onDocumentMouseClick, false);
 			start();
 			
 			function start() {	
@@ -205,10 +209,9 @@
 				
 				// batteries
 				geometry =  new THREE.CylinderGeometry( 1, TILE_SIZE*3, TILE_SIZE*3, 4 );
-				var batteryXPos = [-900, 0 ,900];
 				for (var i=0; i<batteryXPos.length; i++) {
 					var mesh = new THREE.Mesh( geometry, matBattery );
-					mesh.position.set(batteryXPos[i],-600,0);
+					mesh.position.set(batteryXPos[i],SCREEN_BOTTOM,0);
 					mesh.scale.x = mesh.scale.y = mesh.scale.z = s;
 					scene.add( mesh );
 				}
@@ -218,7 +221,7 @@
 				geometry = new THREE.BoxGeometry( 20, 20, 20 );
 				for (var i=0; i<cityXPos.length; i++) {
 					var mesh = new THREE.Mesh( geometry, matCity );
-					mesh.position.set(cityXPos[i],-600,0);
+					mesh.position.set(cityXPos[i],SCREEN_BOTTOM,0);
 					mesh.scale.x = mesh.scale.y = mesh.scale.z = s;
 					scene.add( mesh );
 				}
@@ -244,6 +247,11 @@
 				mousePosition = camera.position.clone().add( dir.multiplyScalar( distance ) );
 
 			}
+			
+			function onDocumentMouseClick(event) {
+				// add bullet
+				createDefendMissile(mousePosition);
+			}
 
 			function createAttackMissile() {
 					var geometry = new THREE.SphereGeometry( 30, 16, 16 );
@@ -263,7 +271,43 @@
 					//TODO add particle smoke after it
 					attackMissiles.push(attackMissile);
 					scene.add(attackMissile);
-					console.log(attackMissiles);
+					//console.log(attackMissiles);
+			}
+			
+			// destination: THREE.Vector3
+			function createDefendMissile(destination) {
+					var geometry = new THREE.SphereGeometry( 30, 16, 16 );
+					geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
+					var defendMissile = new THREE.Mesh( geometry, matDefendMissile );
+					
+					//TODO calculate where to shoot from
+					defendMissile.userData.startPt = closestBatteryLocation(destination);
+					defendMissile.userData.endPt = new THREE.Vector3( destination.x, destination.y, SCREEN_Z);
+					defendMissile.userData.startTime = Date.now();
+					defendMissile.position.copy(defendMissile.userData.startPt);
+					defendMissile.userData.direction = new THREE.Vector3();
+					defendMissile.userData.direction.subVectors(defendMissile.userData.endPt, defendMissile.userData.startPt);
+					defendMissile.lookAt(defendMissile.userData.direction);
+					
+					// TODO rotate the mesh
+					//TODO add particle smoke after it
+					defendMissiles.push(defendMissile);
+					scene.add(defendMissile);
+					console.log(defendMissiles);
+			}
+			
+			// choose the closest battery by x distance
+			function closestBatteryLocation(position) {
+				var batteryXDis = batteryXPos.slice(); // create a copy of battery x coord
+				// calculate distance (x-axis) from battery to clicked location
+				batteryXDis = Array.from(batteryXDis, x => Math.abs(position.x - x)); 
+
+				var indexOfMinX = batteryXDis.indexOf( Math.min(...batteryXDis) );
+				//console.log(batteryXPos[indexOfMinX]);
+		
+				//TODO +20 change to model num
+				var closestLocation = new THREE.Vector3(batteryXPos[indexOfMinX], SCREEN_BOTTOM+20, SCREEN_Z);
+				return closestLocation;
 			}
 			// animate for each frame
 			// http://www.smashinglabs.pl/3d-tetris-with-three-js-tutorial-part-1
@@ -281,13 +325,11 @@
 					createAttackMissile();
 				}
 				
-				// change state of each attacker missile
+				// change state of each attack missile
 				for (var whichMissile=0; whichMissile<attackMissiles.length; whichMissile++) {
 					var curMissile = attackMissiles[whichMissile];
 					
-					// move current attack missiles
-					var deltaDistance = curMissile.endPt - curMissile.startPt;
-					//curMissile.getWorldDirection()
+					// move current missile
 					curMissile.position.addScaledVector(curMissile.getWorldDirection(), ATTACKSPEED);
 					
 					// remove missiles when they hit ground
@@ -295,6 +337,21 @@
 						//TODO add explosion
 						scene.remove(curMissile);
 						attackMissiles.splice(whichMissile, 1);
+					}
+				}
+				
+				// change state of each defend missile
+				for (var whichMissile=0; whichMissile<defendMissiles.length; whichMissile++) {
+					var curMissile = defendMissiles[whichMissile];
+					
+					// move current missiles
+					curMissile.position.addScaledVector(curMissile.getWorldDirection(), DEFENDSPEED);
+					
+					// remove missiles when they hit top
+					if (curMissile.position.y >= SCREEN_TOP) {
+						//TODO add explosion
+						scene.remove(curMissile);
+						defendMissiles.splice(whichMissile, 1);
 					}
 				}
 				
