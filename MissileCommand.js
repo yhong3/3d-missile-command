@@ -25,6 +25,7 @@ var pointsDOM;
 var mousePositionDOM;
 var cumulatedFrameTimeDOM;
 
+var sounds = {};
 
 // materials
 var matAttackMissile = new THREE.MeshPhongMaterial( { color: 0xa9a9a9, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // dark grey
@@ -37,6 +38,7 @@ const TILE_SIZE = 10;
 const ATTACKSTEPTIME = 1000; // drop missile per 3 sec
 const ATTACKSPEED = 5; // 10*1000 = 10px/s
 const DEFENDSPEED = 50;
+const EXPLOSION_RADIUS = 20;
 
 const SCREEN_Z = 0; // z value for the plane
 const SCREEN_TOP = 800; // screen top 800
@@ -90,7 +92,16 @@ function init() {
 	
 	container = document.createElement( 'div' );
 	document.body.appendChild( container );
-	// create camera
+	
+    sounds["gamestart"] = document.getElementById("audio_gamestart");  
+    sounds["explosion"] = document.getElementById("audio_explosion");  
+    sounds["shoot"] = document.getElementById("audio_shoot");  
+    sounds["gameover"] = document.getElementById("audio_gameover");  
+    sounds["score"] = document.getElementById("audio_score");  
+    
+    sounds["gamestart"].play();
+    
+    // create camera
 	camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 5000 );
 	camera.position.z = 2000;
 	camera.position.y = 0; //1000
@@ -142,7 +153,7 @@ function init() {
 	var ambient = new THREE.AmbientLight( 0xffffff );
 	scene.add( ambient );
 
-	pointLight = new THREE.PointLight( 0xffffff, 1 );
+	pointLight = new THREE.PointLight( 0xffffff, .5 );
 	camera.add( pointLight );
 	scene.add( pointLight );
 
@@ -234,7 +245,9 @@ function onDocumentMouseMove(event) {
 
 function onDocumentMouseClick(event) {
 	// add bullet
+    sounds["shoot"].play();
 	createDefendMissile(mousePosition);
+    
 }
 
 function createAttackMissile() {
@@ -340,7 +353,7 @@ function animate() {
 		particleSystem.update( tick );
 		*/
 		// collision check
-		
+		//
 	}
 	
 	// change state of each defend missile
