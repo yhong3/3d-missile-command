@@ -77,10 +77,10 @@
 			// game const
 			const TILE_SIZE = 10;
 			const ATTACKSTEPTIME = 1000; // drop missile per 3 sec
-			const ATTACKSPEED = 5000; // 5 seconds from top to bottom
+			const ATTACKSPEED = 5; // 10*1000 = 10px/s
 			const SCREEN_Z = 0; // z value for the plane
 			const SCREEN_TOP = 800; // screen top 800
-			const SCREEN_BOTTOM = -1000; // screen bottom -1000
+			const SCREEN_BOTTOM = -600; // screen bottom -1000
 			const SCREEN_LEFT = -1300; // screen BORDERLEFT -1300
 			const SCREEN_RIGHT = 1300; // screen BORDERIGHT 1300
 
@@ -245,6 +245,26 @@
 
 			}
 
+			function createAttackMissile() {
+					var geometry = new THREE.SphereGeometry( 30, 16, 16 );
+					geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
+					var attackMissile = new THREE.Mesh( geometry, matAttackMissile );
+					attackMissile.userData.startPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
+																		SCREEN_TOP, SCREEN_Z);
+					attackMissile.userData.endPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
+																		SCREEN_BOTTOM, SCREEN_Z);
+					attackMissile.userData.startTime = Date.now();
+					attackMissile.position.copy(attackMissile.userData.startPt);
+					attackMissile.userData.direction = new THREE.Vector3();
+					attackMissile.userData.direction.subVectors(attackMissile.userData.endPt, attackMissile.userData.startPt);
+					attackMissile.lookAt(attackMissile.userData.direction);
+					
+					// TODO rotate the mesh
+					//TODO add particle smoke after it
+					attackMissiles.push(attackMissile);
+					scene.add(attackMissile);
+					console.log(attackMissiles);
+			}
 			// animate for each frame
 			// http://www.smashinglabs.pl/3d-tetris-with-three-js-tutorial-part-1
 
@@ -256,27 +276,30 @@
 				
 				while(cumulatedFrameTime > ATTACKSTEPTIME) {
 					cumulatedFrameTime -= ATTACKSTEPTIME;
-
-					// every step time, add new geometry
-					var geometry = new THREE.SphereGeometry( 30, 16, 16 );
-					geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.5, 1.0 ) ); // make it ellipsoid
-					var attackMissile = new THREE.Mesh( geometry, matAttackMissile );
-					attackMissile.userData.startPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
-																		SCREEN_TOP, SCREEN_Z);
-					attackMissile.userData.endPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
-																		SCREEN_BOTTOM, SCREEN_Z);
 					
-					attackMissile.position.set(attackMissile.userData.startPt.x, attackMissile.userData.startPt.y, attackMissile.userData.startPt.z);
-					
-					// TODO rotate the mesh
-					//TODO add particle smoke after it
-					attackMissiles.push(attackMissile);
-					scene.add( attackMissile );
-					//console.log(attackMissiles);
-
+					// every step time, add new attacking missile
+					createAttackMissile();
 				}
-		
-		
+				
+				// change state of each attacker missile
+				for (var whichMissile=0; whichMissile<attackMissiles.length; whichMissile++) {
+					var curMissile = attackMissiles[whichMissile];
+					
+					// move current attack missiles
+					var deltaDistance = curMissile.endPt - curMissile.startPt;
+					//curMissile.getWorldDirection()
+					curMissile.position.addScaledVector(curMissile.getWorldDirection(), ATTACKSPEED);
+					
+					// remove missiles when they hit ground
+					if (curMissile.position.y <= SCREEN_BOTTOM) {
+						//TODO add explosion
+						scene.remove(curMissile);
+						attackMissiles.splice(whichMissile, 1);
+					}
+				}
+				
+				
+				// render
 				render();
 				stats.update();
 				if(!gameOver) requestAnimationFrame( animate );
@@ -291,8 +314,8 @@
 				//pointLight.position.x = 1500 * Math.cos( timer );
 				//pointLight.position.z = 1500 * Math.sin( timer );
 
-				//camera.position.x += ( mouseX - camera.position.x ) * .05;
-				//camera.position.y += ( - mouseY - camera.position.y ) * .05;
+				camera.position.x += ( mouseX - camera.position.x ) * .05;
+				camera.position.y += ( - mouseY - camera.position.y ) * .05;
 				mousePositionDOM.innerHTML = "x: " + mousePosition.x + " y: " + mousePosition.y;
 				cumulatedFrameTimeDOM.innerHTML = "cumulatedFrameTime: " + cumulatedFrameTime;
 
