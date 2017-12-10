@@ -8,6 +8,10 @@ var camera, scene, renderer;
 var mesh, geometry;
 var loader;
 var pointLight;
+var options, spawnerOptions, particleSystem;
+var tick = 0;
+var clock = new THREE.Clock();
+
 
 var mouseX = 0;
 var mouseY = 0;
@@ -89,7 +93,7 @@ function init() {
 	// create camera
 	camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 5000 );
 	camera.position.z = 2000;
-	camera.position.y = 500; //1000
+	camera.position.y = 0; //1000
 
 	camera.isPerspectiveCamera = false;
 
@@ -107,7 +111,32 @@ function init() {
 
 	scene = new THREE.Scene();
 	scene.background = reflectionCube;
+	
+	particleSystem = new THREE.GPUParticleSystem( {
+		maxParticles: 250000
+	} );
+	scene.add( particleSystem );
 
+	options = {
+		position: new THREE.Vector3(),
+		positionRandomness: .3, //.3
+		velocity: new THREE.Vector3(),
+		velocityRandomness: .5,
+		color: 0xaa88ff,
+		colorRandomness: .2,
+		turbulence: .5, //.5
+		lifetime: 3, //1
+		size: 10,
+		sizeRandomness: 1
+	};
+	
+	spawnerOptions = {
+	spawnRate: 1500, // 15000
+	horizontalSpeed: 1.5, //1.5
+	verticalSpeed: 1.33, //1.33
+	timeScale: 1
+};
+	
 	// LIGHTS
 
 	var ambient = new THREE.AmbientLight( 0xffffff );
@@ -193,11 +222,12 @@ function onDocumentMouseMove(event) {
 	vector.set(
 		( event.clientX / window.innerWidth ) * 2 - 1,
 		- ( event.clientY / window.innerHeight ) * 2 + 1,
-		0.5 );
+		.5 );
 
 	vector.unproject( camera );
 	var dir = vector.sub( camera.position ).normalize();
-	var distance = - camera.position.z / dir.z;
+	var targetZ = SCREEN_Z;
+	var distance = (targetZ - camera.position.z) / dir.z;
 	mousePosition = camera.position.clone().add( dir.multiplyScalar( distance ) );
 
 }
@@ -208,46 +238,46 @@ function onDocumentMouseClick(event) {
 }
 
 function createAttackMissile() {
-		var geometry = new THREE.SphereGeometry( 30, 16, 16 );
-		geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
-		var attackMissile = new THREE.Mesh( geometry, matAttackMissile );
-		attackMissile.userData.startPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
-															SCREEN_TOP, SCREEN_Z);
-		attackMissile.userData.endPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
-															SCREEN_BOTTOM, SCREEN_Z);
-		attackMissile.userData.startTime = Date.now();
-		attackMissile.position.copy(attackMissile.userData.startPt);
-		attackMissile.userData.direction = new THREE.Vector3();
-		attackMissile.userData.direction.subVectors(attackMissile.userData.endPt, attackMissile.userData.startPt);
-		attackMissile.lookAt(attackMissile.userData.direction);
-		
-		// TODO rotate the mesh
-		//TODO add particle smoke after it
-		attackMissiles.push(attackMissile);
-		scene.add(attackMissile);
-		//console.log(attackMissiles);
+	var geometry = new THREE.SphereGeometry( 30, 16, 16 );
+	geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
+	var attackMissile = new THREE.Mesh( geometry, matAttackMissile );
+	attackMissile.userData.startPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
+														SCREEN_TOP, SCREEN_Z);
+	attackMissile.userData.endPt = new THREE.Vector3( getRandomInt(SCREEN_LEFT, SCREEN_RIGHT), 
+														SCREEN_BOTTOM, SCREEN_Z);
+	attackMissile.userData.startTime = Date.now();
+	attackMissile.position.copy(attackMissile.userData.startPt);
+	attackMissile.userData.direction = new THREE.Vector3();
+	attackMissile.userData.direction.subVectors(attackMissile.userData.endPt, attackMissile.userData.startPt);
+	attackMissile.lookAt(attackMissile.userData.endPt);
+	
+	// TODO rotate the mesh
+	//TODO add particle smoke after it
+	attackMissiles.push(attackMissile);
+	scene.add(attackMissile);
+	//console.log(attackMissiles);
 }
 
 // destination: THREE.Vector3
 function createDefendMissile(destination) {
-		var geometry = new THREE.SphereGeometry( 30, 16, 16 );
-		geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
-		var defendMissile = new THREE.Mesh( geometry, matDefendMissile );
-		
-		//TODO calculate where to shoot from
-		defendMissile.userData.startPt = closestBatteryLocation(destination);
-		defendMissile.userData.endPt = new THREE.Vector3( destination.x, destination.y, SCREEN_Z);
-		defendMissile.userData.startTime = Date.now();
-		defendMissile.position.copy(defendMissile.userData.startPt);
-		defendMissile.userData.direction = new THREE.Vector3();
-		defendMissile.userData.direction.subVectors(defendMissile.userData.endPt, defendMissile.userData.startPt);
-		defendMissile.lookAt(defendMissile.userData.direction);
-		
-		// TODO rotate the mesh
-		//TODO add particle smoke after it
-		defendMissiles.push(defendMissile);
-		scene.add(defendMissile);
-		console.log(defendMissiles);
+	geometry = new THREE.SphereGeometry( 30, 16, 16 );
+	geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
+	var defendMissile = new THREE.Mesh( geometry, matDefendMissile );
+	
+	//TODO calculate where to shoot from
+	defendMissile.userData.startPt = closestBatteryLocation(destination);
+	defendMissile.userData.endPt = new THREE.Vector3( destination.x, destination.y, SCREEN_Z);
+	defendMissile.userData.startTime = Date.now();
+	defendMissile.position.copy(defendMissile.userData.startPt);
+	defendMissile.userData.direction = new THREE.Vector3();
+	defendMissile.userData.direction.subVectors(defendMissile.userData.endPt, defendMissile.userData.startPt);
+	defendMissile.lookAt(defendMissile.userData.endPt);
+	
+	// TODO rotate the mesh
+	//TODO add particle smoke after it
+	defendMissiles.push(defendMissile);
+	scene.add(defendMissile);
+	console.log(defendMissiles);
 }
 
 // choose the closest battery by x distance
@@ -260,7 +290,7 @@ function closestBatteryLocation(position) {
 	//console.log(batteryXPos[indexOfMinX]);
 
 	//TODO +20 change to model num
-	var closestLocation = new THREE.Vector3(batteryXPos[indexOfMinX], SCREEN_BOTTOM+20, SCREEN_Z);
+	var closestLocation = new THREE.Vector3(batteryXPos[indexOfMinX], SCREEN_BOTTOM, SCREEN_Z);
 	return closestLocation;
 }
 // animate for each frame
@@ -279,6 +309,12 @@ function animate() {
 		createAttackMissile();
 	}
 	
+	// particle system
+	var delta = clock.getDelta()
+	tick += delta;
+	if ( tick < 0 ) tick = 0;
+	
+	
 	// change state of each attack missile
 	for (var whichMissile=0; whichMissile<attackMissiles.length; whichMissile++) {
 		var curMissile = attackMissiles[whichMissile];
@@ -292,6 +328,19 @@ function animate() {
 			scene.remove(curMissile);
 			attackMissiles.splice(whichMissile, 1);
 		}
+		/*
+		if ( delta > 0 ) {
+			options.position.x = curMissile.position.x;
+			options.position.y = curMissile.position.y;
+			options.position.z = curMissile.position.z;
+		for ( var x = 0; x < spawnerOptions.spawnRate * delta; x++ ) {
+			particleSystem.spawnParticle( options );
+		}
+		}
+		particleSystem.update( tick );
+		*/
+		// collision check
+		
 	}
 	
 	// change state of each defend missile
@@ -309,7 +358,9 @@ function animate() {
 		}
 	}
 	
-	
+
+
+
 	// render
 	render();
 	stats.update();
@@ -325,8 +376,8 @@ function render() {
 	//pointLight.position.x = 1500 * Math.cos( timer );
 	//pointLight.position.z = 1500 * Math.sin( timer );
 
-	camera.position.x += ( mouseX - camera.position.x ) * .05;
-	camera.position.y += ( - mouseY - camera.position.y ) * .05;
+	//camera.position.x += ( mouseX - camera.position.x ) * .05;
+	//camera.position.y += ( - mouseY - camera.position.y ) * .05;
 	mousePositionDOM.innerHTML = "x: " + mousePosition.x + " y: " + mousePosition.y;
 	cumulatedFrameTimeDOM.innerHTML = "cumulatedFrameTime: " + cumulatedFrameTime;
 
