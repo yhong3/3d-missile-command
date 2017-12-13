@@ -130,7 +130,7 @@ function init() {
 	camera.isPerspectiveCamera = false;
 
 	// create skybox
-	var path = "examples/textures/cube/skybox/";
+	var path = "images/skybox/";
 	var format = '.jpg';
 	var urls = [
 			path + 'px' + format, path + 'nx' + format,
@@ -143,12 +143,12 @@ function init() {
 
 	scene = new THREE.Scene();
 	scene.background = reflectionCube;
-	
+	/*
 	particleSystem = new THREE.GPUParticleSystem( {
 		maxParticles: 250000
 	} );
 	scene.add( particleSystem );
-
+*/
 	options = {
 		position: new THREE.Vector3(),
 		positionRandomness: 3, //.3
@@ -576,7 +576,7 @@ function animate() {
         gameOver = true;
     }
 	// render
-	particleSystem.update( tick );
+	//particleSystem.update( tick );
 	render();
 	stats.update();
 	if(!gameOver) {
