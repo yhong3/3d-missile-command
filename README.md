@@ -1,8 +1,20 @@
 # missile-command
-3d missile command written with THREE.js
+3d missile command written with THREE.js, just keep shooting and shooting.
+
+![Thumbnail](/images/thumbnail.png)
+
 [> Play here](https://yhong3.github.io/missile-command/)
-![GitHub Logo](/images/logo.png)
+
 * screen cast
+
+## Basic idea
+Cube: city
+Pyramid: battery
+Red bullet: attacking missiles
+White bullet: antiballistic missile
+
+Click to shoot antiballistic bullet.
+Gameover when either cities or batteries are all bombed.
 
 ## Credits
 Super useful three-js game tutorial
@@ -13,7 +25,7 @@ created from
 https://www.bfxr.net/
 
 
-* 10% Part 0: properly turned in program (new requirements!)
+* DONE.. 10% Part 0: properly turned in program (new requirements!)
 * DONE.. 15% Part 1: display the field and sky
 * DONE.. 25% Part 2: display and animate descending missiles
 * DONE.. 25% Part 3: display and animate ascending antiballistic missiles

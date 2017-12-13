@@ -585,6 +585,7 @@ function animate() {
         // show gameover msg
         var dialog = document.getElementById("dialog_gameover");
         dialog.showModal();
+        sounds["gameover"].play();
     }
 
 }
