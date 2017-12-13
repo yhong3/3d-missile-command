@@ -38,6 +38,8 @@ const TILE_SIZE = 10;
 const ATTACKSTEPTIME = 1000; // drop missile per 1 sec
 const ATTACKSPEED = 5; // 10*1000 = 10px/s
 const DEFENDSPEED = 50;
+const SPACESHIPSPEED = 10;
+const SPACESHIPSTEPTIME = 3000; // 3s
 const EXPLOSION_RADIUS = 40;
 const MISSILE_SIZE = 20;
 
@@ -46,19 +48,20 @@ const SCREEN_TOP = 800; // screen top 800
 const SCREEN_BOTTOM = -600; // screen bottom -1000
 const SCREEN_LEFT = -1300; // screen BORDERLEFT -1300
 const SCREEN_RIGHT = 1300; // screen BORDERIGHT 1300
-
+const SPACESHIP_MAXHEIGHT = 400;
 const SCORE_CITYHIT = -10;
 const SCORE_DEFENDED = +10;
 const SCORE_BATTERYHIT = -50;
+const SCORE_SPACESHIP = +100;
 
-const SPACESHIP_COUNT = 5;
 const EXPLOSIONSTEP = 0.1;
-
 // game variables
 var gameOver = false;
 var startTime = Date.now(); //timestamp
 var frameTime = 0; // ms
 var cumulatedFrameTime = 0 //ms
+var cumulatedFrameTime2 = 0 //ms
+
 var _lastFrameTime = Date.now(); //timestamp
 
 var currentPoints = 0; // score keeping
@@ -66,6 +69,7 @@ var currentPoints = 0; // score keeping
 var batteryXPos = [-900, 0 ,900];
 var cities = [];
 var batteries = [];
+var spaceships = [];
 var cityCount = 0;
 var batteryCount = 0;
 var attackMissiles = []; // descending missiles
@@ -284,9 +288,39 @@ function onDocumentMouseClick(event) {
         createDefendMissile(mousePosition);
     }
 }
-function createBoundingBox(object) {
+
+function createSpaceship() {
     
+	var geometry = new THREE.BoxGeometry( 15, 15, 30 );
+    var matSpaceship = new THREE.MeshPhongMaterial( { color: 0x9400d3, specular:0xe6e6fa, combine: THREE.MixOperation, reflectivity: 0.25 } ); // purple
+
+	var mesh = new THREE.Mesh( geometry, matSpaceship );
+    var spaceshipHeight = getRandomInt(SCREEN_TOP, SPACESHIP_MAXHEIGHT);
+    
+    var startFromLeft = Math.round(Math.random());
+    //console.log('start from left='+startFromLeft );
+    switch(startFromLeft) {
+        case 1:
+            mesh.userData.startPt = new THREE.Vector3( SCREEN_LEFT, spaceshipHeight, SCREEN_Z);
+            mesh.userData.endPt = new THREE.Vector3(  SCREEN_RIGHT, spaceshipHeight, SCREEN_Z);
+            break;
+        case 0:
+            mesh.userData.startPt = new THREE.Vector3( SCREEN_RIGHT, spaceshipHeight, SCREEN_Z);
+            mesh.userData.endPt = new THREE.Vector3(  SCREEN_LEFT, spaceshipHeight, SCREEN_Z);
+            break;
+ 
+    }
+    mesh.userData.startTime = Date.now();
+	mesh.position.copy(mesh.userData.startPt);
+	mesh.userData.direction = new THREE.Vector3();
+	mesh.userData.direction.subVectors(mesh.userData.endPt, mesh.userData.startPt);
+	mesh.lookAt(mesh.userData.endPt);
+	
+	mesh.userData.type = 'spaceship';
+    spaceships.push(mesh);
+	scene.add(mesh);
 }
+
 function createAttackMissile() {
 	var geometry = new THREE.SphereGeometry( 30, 16, 16 );
 	geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
@@ -345,7 +379,7 @@ function closestBatteryLocation(position) {
 	//console.log(batteryXPos[indexOfMinX]);
 
 	//TODO +20 change to model num
-	var closestLocation = new THREE.Vector3(batteryXPos[indexOfMinX], SCREEN_BOTTOM, SCREEN_Z);
+	var closestLocation = new THREE.Vector3(batteries[indexOfMinX].position.x, SCREEN_BOTTOM, SCREEN_Z);
 	return closestLocation;
 }
 // animate for each frame
@@ -419,7 +453,42 @@ function checkAttackMissileCollision() {
         }
 	}
 }
-function checkDefendMissileCollision() {
+
+function checkSpaceshipCollision() {
+    for (var whichSpaceship=0; whichSpaceship<spaceships.length; whichSpaceship++) {
+		var curSpaceship = spaceships[whichSpaceship];
+        
+		// move spaceship
+		curSpaceship.position.addScaledVector(curSpaceship.getWorldDirection(), SPACESHIPSPEED);
+		
+		// collision check on defendmissiles
+        for (var i=0; i<defendMissiles.length; i++) {
+            var curMesh = defendMissiles[i];
+            if ( curSpaceship.position.distanceTo(curMesh.position) <= (EXPLOSION_RADIUS)) {
+                // current collidable object is hit                
+                sounds["explosion"].play();
+                addPoints(SCORE_SPACESHIP);
+                animateExplosion(curMesh.position);
+
+                scene.remove(curMesh);
+                defendMissiles.splice(defendMissiles.indexOf(curMesh), 1); 
+                collidableMesh.splice(collidableMesh.indexOf(curMesh),1);
+                
+                scene.remove(curSpaceship);
+                spaceships.splice(whichSpaceship, 1);
+            
+                break;
+            }
+        } // end of collidable mesh check  
+            
+        if (Math.abs(curSpaceship.position.x) >= SCREEN_RIGHT ) {
+            scene.remove(curSpaceship);
+            spaceships.splice(whichSpaceship, 1); 
+        }
+	}
+}
+
+function moveDefendMissile() {
     for (var whichMissile=0; whichMissile<defendMissiles.length; whichMissile++) {
         var curMissile = defendMissiles[whichMissile];
 
@@ -430,11 +499,13 @@ function checkDefendMissileCollision() {
         if (curMissile.position.y >= SCREEN_TOP) {
             scene.remove(curMissile);
             defendMissiles.splice(whichMissile, 1); 
-
+            collidableMesh.splice(collidableMesh.indexOf(curMissile), 1)
         }
     
 	}
 }
+
+
 function animateExplosion(position) {
     //TODO get delta
     /*
@@ -461,12 +532,21 @@ function animate() {
 	frameTime = currentTime - _lastFrameTime;
 	_lastFrameTime = currentTime;
 	cumulatedFrameTime += frameTime;
+    cumulatedFrameTime2 += frameTime;
+
 	
 	while(cumulatedFrameTime > ATTACKSTEPTIME) {
 		cumulatedFrameTime -= ATTACKSTEPTIME;
 		
 		// every step time, add new attacking missile
 		createAttackMissile();
+	}
+    
+	while(cumulatedFrameTime2 > SPACESHIPSTEPTIME) {
+		cumulatedFrameTime2 -= SPACESHIPSTEPTIME;
+		
+		// every step time, add new attacking missile
+		createSpaceship();
 	}
 	
 	// particle system
@@ -476,7 +556,8 @@ function animate() {
 	
 	// change state of each attack missile
 	checkAttackMissileCollision();
-    checkDefendMissileCollision();
+    moveDefendMissile();
+    checkSpaceshipCollision();
     
     // explosion effect
     for (var i=0; i<explosions.length; i++) {
@@ -498,16 +579,19 @@ function animate() {
 	particleSystem.update( tick );
 	render();
 	stats.update();
-	if(!gameOver) requestAnimationFrame( animate );
+	if(!gameOver) {
+        requestAnimationFrame( animate );
+    } else {
+        // show gameover msg
+        var dialog = document.getElementById("dialog_gameover");
+        dialog.showModal();
+    }
 
 }
 
 function render() {
 
 	var timer = -0.0002 * Date.now();
-
-	//pointLight.position.x = 1500 * Math.cos( timer );
-	//pointLight.position.z = 1500 * Math.sin( timer );
 
 	//camera.position.x += ( mouseX - camera.position.x ) * .05;
 	//camera.position.y += ( - mouseY - camera.position.y ) * .05;
