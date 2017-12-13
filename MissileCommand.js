@@ -28,10 +28,10 @@ var cumulatedFrameTimeDOM;
 var sounds = {};
 
 // materials
-var matAttackMissile = new THREE.MeshPhongMaterial( { color: 0xa9a9a9, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // dark grey
+var matAttackMissile = new THREE.MeshPhongMaterial( { color: 0x800000, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // dark red
 var matDefendMissile = new THREE.MeshPhongMaterial( { color: 0xd3d3d3, specular:0xa9a9a9, combine: THREE.MixOperation, reflectivity: 0.25 } ); // light grey
 var matBattery = new THREE.MeshPhongMaterial( { color: 0xDEB887, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } );
-var matCity = new THREE.MeshBasicMaterial( {color: 0xDAA520 , wireframe:true} );
+var matCity = new THREE.MeshBasicMaterial( {color: 0xDEB887 , specular:0xaa0000, wireframe:false, combine: THREE.MixOperation, reflectivity: 0.25} );
 
 // game const
 const TILE_SIZE = 10;
@@ -211,6 +211,14 @@ function onWindowResize() {
 
 function createScene( geometry ) {
 
+    // add terrain
+    geometry =  new THREE.PlaneGeometry(3000, 3000);
+    var planeMaterial = new THREE.MeshBasicMaterial( {color: 0xc2b280, side: THREE.DoubleSide} ); //sand color
+    var plane = new THREE.Mesh( geometry, planeMaterial );
+    plane.rotateX(Math.PI/2);
+    plane.position.set(0,SCREEN_BOTTOM-60,0);
+    scene.add( plane );
+	
 	// add models to the scene
 	var s = 5;
 	
@@ -478,8 +486,8 @@ function render() {
 	//pointLight.position.x = 1500 * Math.cos( timer );
 	//pointLight.position.z = 1500 * Math.sin( timer );
 
-	//camera.position.x += ( mouseX - camera.position.x ) * .05;
-	//camera.position.y += ( - mouseY - camera.position.y ) * .05;
+	camera.position.x += ( mouseX - camera.position.x ) * .05;
+	camera.position.y += ( - mouseY - camera.position.y ) * .05;
 	mousePositionDOM.innerHTML = "x: " + mousePosition.x + " y: " + mousePosition.y;
 	cumulatedFrameTimeDOM.innerHTML = "cumulatedFrameTime: " + cumulatedFrameTime;
 
