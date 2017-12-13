@@ -31,7 +31,7 @@ var sounds = {};
 var matAttackMissile = new THREE.MeshPhongMaterial( { color: 0x800000, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // dark red
 var matDefendMissile = new THREE.MeshPhongMaterial( { color: 0xd3d3d3, specular:0xa9a9a9, combine: THREE.MixOperation, reflectivity: 0.25 } ); // light grey
 var matBattery = new THREE.MeshPhongMaterial( { color: 0xDEB887, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } );
-var matCity = new THREE.MeshBasicMaterial( {color: 0xDEB887 , specular:0xaa0000, wireframe:false, combine: THREE.MixOperation, reflectivity: 0.25} );
+var matCity = new THREE.MeshPhongMaterial( {color: 0xDEB887 , specular:0xaa0000, wireframe:false, combine: THREE.MixOperation, reflectivity: 0.25} );
 
 // game const
 const TILE_SIZE = 10;
@@ -50,6 +50,10 @@ const SCREEN_RIGHT = 1300; // screen BORDERIGHT 1300
 const SCORE_CITYHIT = -10;
 const SCORE_DEFENDED = +10;
 const SCORE_BATTERYHIT = -50;
+
+const SPACESHIP_COUNT = 5;
+const EXPLOSIONSTEP = 0.1;
+
 // game variables
 var gameOver = false;
 var startTime = Date.now(); //timestamp
@@ -67,7 +71,7 @@ var batteryCount = 0;
 var attackMissiles = []; // descending missiles
 var defendMissiles = []; // ascending missiles
 var collidableMesh = [];
-
+var explosions = [];
 var raycaster = new THREE.Raycaster();
 
 //
@@ -310,7 +314,6 @@ function createDefendMissile(destination) {
 	geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
 	var defendMissile = new THREE.Mesh( geometry, matDefendMissile );
 	
-	//TODO calculate where to shoot from
 	defendMissile.userData.startPt = closestBatteryLocation(destination);
 	defendMissile.userData.endPt = new THREE.Vector3( destination.x, destination.y, SCREEN_Z);
 	defendMissile.userData.startTime = Date.now();
@@ -319,13 +322,12 @@ function createDefendMissile(destination) {
 	defendMissile.userData.direction.subVectors(defendMissile.userData.endPt, defendMissile.userData.startPt);
 	defendMissile.lookAt(defendMissile.userData.endPt);
 	
-	// TODO rotate the mesh
 	//TODO add particle smoke after it
 	defendMissile.userData.type = 'defendMissile';
     defendMissiles.push(defendMissile);
     collidableMesh.push(defendMissile);
 	scene.add(defendMissile);
-	console.log(defendMissiles);
+	//console.log(defendMissiles);
 }
 
 // choose the closest battery by x distance
@@ -372,7 +374,7 @@ function checkAttackMissileCollision() {
                 case 'city':
                     sounds["doomed"].play();
                     addPoints(SCORE_CITYHIT);
-                    //animateExplosion(cities[i].position);
+                    animateExplosion(curMesh.position);
                     
                     // remove city
                     scene.remove(curMesh);
@@ -383,19 +385,21 @@ function checkAttackMissileCollision() {
                 case 'battery':
                     sounds["doomed"].play();
                     addPoints(SCORE_CITYHIT);
-                    //animateExplosion(cities[i].position);
+                    animateExplosion(curMesh.position);
                     
                     // remove city
                     // remove missile
                     scene.remove(curMesh);
                     batteries.splice(batteries.indexOf(curMesh), 1);
+                    
                     collidableMesh.splice(i,1);
                     batteryCount--;
                     break;
                 case 'defendMissile':
                     sounds["explosion"].play();
                     addPoints(SCORE_DEFENDED);
-                    
+                    animateExplosion(curMesh.position);
+
                     scene.remove(curMesh);
                     defendMissiles.splice(defendMissiles.indexOf(curMesh), 1); 
                     collidableMesh.splice(i,1);
@@ -424,7 +428,6 @@ function checkDefendMissileCollision() {
 
         // remove missiles when they hit top
         if (curMissile.position.y >= SCREEN_TOP) {
-            //TODO add explosion
             scene.remove(curMissile);
             defendMissiles.splice(whichMissile, 1); 
 
@@ -434,6 +437,7 @@ function checkDefendMissileCollision() {
 }
 function animateExplosion(position) {
     //TODO get delta
+    /*
 	if ( delta > 0 ) {
 		options.position.x = position.x;
 		options.position.y = position.y;
@@ -442,6 +446,14 @@ function animateExplosion(position) {
 			particleSystem.spawnParticle( options );
 		}
 	}
+    */
+    var geometry = new THREE.SphereGeometry( 100, 16, 16 );
+    var matExplosion = new THREE.MeshPhongMaterial( { color: 0xffb347, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // orange
+	var mesh = new THREE.Mesh( geometry, matExplosion );
+	mesh.position.copy(position);
+    mesh.userData.currentScale = 1;
+    explosions.push(mesh);
+    scene.add(mesh);
 }
 
 function animate() {
@@ -464,9 +476,20 @@ function animate() {
 	
 	// change state of each attack missile
 	checkAttackMissileCollision();
-    // move attack missiles
-    // move defend missiles
     checkDefendMissileCollision();
+    
+    // explosion effect
+    for (var i=0; i<explosions.length; i++) {
+        var currentScale = explosions[i].userData.currentScale;
+        if (currentScale <= EXPLOSIONSTEP) {
+            scene.remove(explosions[i]);
+            explosions.splice(i,1);
+            continue;
+        }
+        currentScale -= EXPLOSIONSTEP;
+        explosions[i].scale.set(currentScale, currentScale, currentScale);
+        explosions[i].userData.currentScale = currentScale;
+    }
     
     if (batteryCount == 0 || cityCount == 0) {
         gameOver = true;
@@ -486,8 +509,8 @@ function render() {
 	//pointLight.position.x = 1500 * Math.cos( timer );
 	//pointLight.position.z = 1500 * Math.sin( timer );
 
-	camera.position.x += ( mouseX - camera.position.x ) * .05;
-	camera.position.y += ( - mouseY - camera.position.y ) * .05;
+	//camera.position.x += ( mouseX - camera.position.x ) * .05;
+	//camera.position.y += ( - mouseY - camera.position.y ) * .05;
 	mousePositionDOM.innerHTML = "x: " + mousePosition.x + " y: " + mousePosition.y;
 	cumulatedFrameTimeDOM.innerHTML = "cumulatedFrameTime: " + cumulatedFrameTime;
 

@@ -21,7 +21,7 @@ https://www.bfxr.net/
 
 EXTRA CREDIT 
 1% Split descending missiles every so often.
-2% Animate missile-missile and missile-city/battery explosions.
+DONE 2% Animate missile-missile and missile-city/battery explosions.
 2% Add periodic spaceships flying through as unusual targets players can shoot
 DONE.. 2% Track and display score. You can choose any scoring scale you want.
 2% When all descending missiles have been exploded or landed, a new level appears.
