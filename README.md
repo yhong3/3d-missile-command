@@ -9,12 +9,13 @@
 
 
 ## Basic idea
-Cube: city
-Pyramid: battery
-Red bullet: attacking missiles
-White bullet: antiballistic missile
+* Cube: city
+* Pyramid: battery
+* Red bullet: attacking missiles
+* White bullet: antiballistic missile
 
 Click to shoot antiballistic bullet.
+
 Gameover when either cities or batteries are all bombed.
 
 ## Credits
