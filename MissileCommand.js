@@ -29,16 +29,17 @@ var sounds = {};
 
 // materials
 var matAttackMissile = new THREE.MeshPhongMaterial( { color: 0xa9a9a9, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // dark grey
-var matDefendMissile = new THREE.MeshPhongMaterial( { color: 0xd3d3d3, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } ); // light grey
+var matDefendMissile = new THREE.MeshPhongMaterial( { color: 0xd3d3d3, specular:0xa9a9a9, combine: THREE.MixOperation, reflectivity: 0.25 } ); // light grey
 var matBattery = new THREE.MeshPhongMaterial( { color: 0xDEB887, specular:0xaa0000, combine: THREE.MixOperation, reflectivity: 0.25 } );
 var matCity = new THREE.MeshBasicMaterial( {color: 0xDAA520 , wireframe:true} );
 
 // game const
 const TILE_SIZE = 10;
-const ATTACKSTEPTIME = 1000; // drop missile per 3 sec
+const ATTACKSTEPTIME = 1000; // drop missile per 1 sec
 const ATTACKSPEED = 5; // 10*1000 = 10px/s
 const DEFENDSPEED = 50;
-const EXPLOSION_RADIUS = 20;
+const EXPLOSION_RADIUS = 40;
+const MISSILE_SIZE = 20;
 
 const SCREEN_Z = 0; // z value for the plane
 const SCREEN_TOP = 800; // screen top 800
@@ -46,8 +47,9 @@ const SCREEN_BOTTOM = -600; // screen bottom -1000
 const SCREEN_LEFT = -1300; // screen BORDERLEFT -1300
 const SCREEN_RIGHT = 1300; // screen BORDERIGHT 1300
 
-var batteryXPos = [-900, 0 ,900];
-
+const SCORE_CITYHIT = -10;
+const SCORE_DEFENDED = +10;
+const SCORE_BATTERYHIT = -50;
 // game variables
 var gameOver = false;
 var startTime = Date.now(); //timestamp
@@ -57,9 +59,19 @@ var _lastFrameTime = Date.now(); //timestamp
 
 var currentPoints = 0; // score keeping
 
+var batteryXPos = [-900, 0 ,900];
+var cities = [];
+var batteries = [];
+var cityCount = 0;
+var batteryCount = 0;
 var attackMissiles = []; // descending missiles
 var defendMissiles = []; // ascending missiles
+var collidableMesh = [];
+
+var raycaster = new THREE.Raycaster();
+
 //
+
 
 /* start classes */
 document.addEventListener('mousemove', onDocumentMouseMove, false);
@@ -78,7 +90,7 @@ function start() {
 // add points
 function addPoints(n) {
 	currentPoints += n;
-	pointsDOM.innerHTML = "Points: " + Tetris.currentPoints;
+	pointsDOM.innerHTML = "Points: " + currentPoints;
 } // end add points
 
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/random
@@ -98,6 +110,7 @@ function init() {
     sounds["shoot"] = document.getElementById("audio_shoot");  
     sounds["gameover"] = document.getElementById("audio_gameover");  
     sounds["score"] = document.getElementById("audio_score");  
+    sounds["doomed"] = document.getElementById("audio_doomed");  
     
     sounds["gamestart"].play();
     
@@ -130,19 +143,19 @@ function init() {
 
 	options = {
 		position: new THREE.Vector3(),
-		positionRandomness: .3, //.3
+		positionRandomness: 3, //.3
 		velocity: new THREE.Vector3(),
-		velocityRandomness: .5,
-		color: 0xaa88ff,
+		velocityRandomness: 3,
+		color: 0xff4500,
 		colorRandomness: .2,
-		turbulence: .5, //.5
+		turbulence: 0, //.5
 		lifetime: 3, //1
-		size: 10,
+		size: 20,
 		sizeRandomness: 1
 	};
 	
 	spawnerOptions = {
-	spawnRate: 1500, // 15000
+	spawnRate: 3000, // 15000
 	horizontalSpeed: 1.5, //1.5
 	verticalSpeed: 1.33, //1.33
 	timeScale: 1
@@ -207,7 +220,11 @@ function createScene( geometry ) {
 		var mesh = new THREE.Mesh( geometry, matBattery );
 		mesh.position.set(batteryXPos[i],SCREEN_BOTTOM,0);
 		mesh.scale.x = mesh.scale.y = mesh.scale.z = s;
-		scene.add( mesh );
+        mesh.userData.type = 'battery';
+		batteries.push(mesh);
+        batteryCount++;
+        collidableMesh.push(mesh);
+        scene.add( mesh );
 	}
 	
 	// cities: https://stackoverflow.com/questions/26418591/how-to-make-a-rectangular-pyramid-in-three-js-r68
@@ -217,7 +234,12 @@ function createScene( geometry ) {
 		var mesh = new THREE.Mesh( geometry, matCity );
 		mesh.position.set(cityXPos[i],SCREEN_BOTTOM,0);
 		mesh.scale.x = mesh.scale.y = mesh.scale.z = s;
+        mesh.userData.type = 'city';
+        cities.push(mesh);
+        cityCount++;
+        collidableMesh.push(mesh);
 		scene.add( mesh );
+        //console.log(cities);
 	}
 
 }
@@ -244,12 +266,15 @@ function onDocumentMouseMove(event) {
 }
 
 function onDocumentMouseClick(event) {
-	// add bullet
-    sounds["shoot"].play();
-	createDefendMissile(mousePosition);
+    if (!gameOver) {
+        // add bullet
+        sounds["shoot"].play();
+        createDefendMissile(mousePosition);
+    }
+}
+function createBoundingBox(object) {
     
 }
-
 function createAttackMissile() {
 	var geometry = new THREE.SphereGeometry( 30, 16, 16 );
 	geometry.applyMatrix( new THREE.Matrix4().makeScale( 1.0, 1.0, 2.0 ) ); // make it ellipsoid
@@ -264,9 +289,9 @@ function createAttackMissile() {
 	attackMissile.userData.direction.subVectors(attackMissile.userData.endPt, attackMissile.userData.startPt);
 	attackMissile.lookAt(attackMissile.userData.endPt);
 	
-	// TODO rotate the mesh
 	//TODO add particle smoke after it
-	attackMissiles.push(attackMissile);
+	attackMissile.userData.type = 'attackMissile';
+    attackMissiles.push(attackMissile);
 	scene.add(attackMissile);
 	//console.log(attackMissiles);
 }
@@ -288,14 +313,21 @@ function createDefendMissile(destination) {
 	
 	// TODO rotate the mesh
 	//TODO add particle smoke after it
-	defendMissiles.push(defendMissile);
+	defendMissile.userData.type = 'defendMissile';
+    defendMissiles.push(defendMissile);
+    collidableMesh.push(defendMissile);
 	scene.add(defendMissile);
 	console.log(defendMissiles);
 }
 
 // choose the closest battery by x distance
 function closestBatteryLocation(position) {
-	var batteryXDis = batteryXPos.slice(); // create a copy of battery x coord
+	var batteryXDis = [];
+    for (var i=0; i<batteries.length; i++) {
+        batteryXDis.push(batteries[i].position.x);
+    }
+	
+    //var batteryXDis = batteryXPos.slice(); // create a copy of battery x coord
 	// calculate distance (x-axis) from battery to clicked location
 	batteryXDis = Array.from(batteryXDis, x => Math.abs(position.x - x)); 
 
@@ -308,6 +340,101 @@ function closestBatteryLocation(position) {
 }
 // animate for each frame
 // http://www.smashinglabs.pl/3d-tetris-with-three-js-tutorial-part-1
+
+function moveMissile(missile, speed) {
+	// move current missile
+	missile.position.addScaledVector(missile.getWorldDirection(), speed);
+	
+	return missile;
+}
+
+function checkAttackMissileCollision() {
+    for (var whichMissile=0; whichMissile<attackMissiles.length; whichMissile++) {
+		var curMissile = attackMissiles[whichMissile];
+        
+		// move missile
+		curMissile.position.addScaledVector(curMissile.getWorldDirection(), ATTACKSPEED);
+		
+		// collision check on cities
+        for (var i=0; i<collidableMesh.length; i++) {
+            var curMesh = collidableMesh[i];
+            if ( curMissile.position.distanceTo(curMesh.position) <= (EXPLOSION_RADIUS)) {
+                // current collidable object is hit
+                switch(curMesh.userData.type) {
+                case 'city':
+                    sounds["doomed"].play();
+                    addPoints(SCORE_CITYHIT);
+                    //animateExplosion(cities[i].position);
+                    
+                    // remove city
+                    scene.remove(curMesh);
+                    cities.splice(cities.indexOf(curMesh), 1);
+                    collidableMesh.splice(i,1);
+                    cityCount--;                    
+                    break;
+                case 'battery':
+                    sounds["doomed"].play();
+                    addPoints(SCORE_CITYHIT);
+                    //animateExplosion(cities[i].position);
+                    
+                    // remove city
+                    // remove missile
+                    scene.remove(curMesh);
+                    batteries.splice(batteries.indexOf(curMesh), 1);
+                    collidableMesh.splice(i,1);
+                    batteryCount--;
+                    break;
+                case 'defendMissile':
+                    sounds["explosion"].play();
+                    addPoints(SCORE_DEFENDED);
+                    
+                    scene.remove(curMesh);
+                    defendMissiles.splice(defendMissiles.indexOf(curMesh), 1); 
+                    collidableMesh.splice(i,1);
+                    break;
+                }
+                
+                scene.remove(curMissile);
+                attackMissiles.splice(whichMissile, 1);
+            }
+        } // end of collidable mesh check  
+        
+        if (curMissile.position.y <= SCREEN_BOTTOM) { // collision on ground
+                //TODO add explosion
+                sounds["explosion"].play();
+                scene.remove(curMissile);
+                attackMissiles.splice(whichMissile, 1);
+        }
+	}
+}
+function checkDefendMissileCollision() {
+    for (var whichMissile=0; whichMissile<defendMissiles.length; whichMissile++) {
+        var curMissile = defendMissiles[whichMissile];
+
+        // move current missiles
+        curMissile.position.addScaledVector(curMissile.getWorldDirection(), DEFENDSPEED);
+
+        // remove missiles when they hit top
+        if (curMissile.position.y >= SCREEN_TOP) {
+            //TODO add explosion
+            scene.remove(curMissile);
+            defendMissiles.splice(whichMissile, 1); 
+
+        }
+    
+	}
+}
+function animateExplosion(position) {
+    //TODO get delta
+	if ( delta > 0 ) {
+		options.position.x = position.x;
+		options.position.y = position.y;
+		options.position.z = position.z;
+		for ( var x = 0; x < spawnerOptions.spawnRate * delta; x++ ) {
+			particleSystem.spawnParticle( options );
+		}
+	}
+}
 
 function animate() {
 	var currentTime = Date.now();
@@ -323,63 +450,25 @@ function animate() {
 	}
 	
 	// particle system
-	var delta = clock.getDelta()
-	tick += delta;
+	var delta = clock.getDelta();
+    tick += delta;
 	if ( tick < 0 ) tick = 0;
 	
-	
 	// change state of each attack missile
-	for (var whichMissile=0; whichMissile<attackMissiles.length; whichMissile++) {
-		var curMissile = attackMissiles[whichMissile];
-		
-		// move current missile
-		curMissile.position.addScaledVector(curMissile.getWorldDirection(), ATTACKSPEED);
-		
-		// remove missiles when they hit ground
-		if (curMissile.position.y <= SCREEN_BOTTOM) {
-			//TODO add explosion
-			scene.remove(curMissile);
-			attackMissiles.splice(whichMissile, 1);
-		}
-		/*
-		if ( delta > 0 ) {
-			options.position.x = curMissile.position.x;
-			options.position.y = curMissile.position.y;
-			options.position.z = curMissile.position.z;
-		for ( var x = 0; x < spawnerOptions.spawnRate * delta; x++ ) {
-			particleSystem.spawnParticle( options );
-		}
-		}
-		particleSystem.update( tick );
-		*/
-		// collision check
-		//
-	}
-	
-	// change state of each defend missile
-	for (var whichMissile=0; whichMissile<defendMissiles.length; whichMissile++) {
-		var curMissile = defendMissiles[whichMissile];
-		
-		// move current missiles
-		curMissile.position.addScaledVector(curMissile.getWorldDirection(), DEFENDSPEED);
-		
-		// remove missiles when they hit top
-		if (curMissile.position.y >= SCREEN_TOP) {
-			//TODO add explosion
-			scene.remove(curMissile);
-			defendMissiles.splice(whichMissile, 1);
-		}
-	}
-	
-
-
-
+	checkAttackMissileCollision();
+    // move attack missiles
+    // move defend missiles
+    checkDefendMissileCollision();
+    
+    if (batteryCount == 0 || cityCount == 0) {
+        gameOver = true;
+    }
 	// render
+	particleSystem.update( tick );
 	render();
 	stats.update();
 	if(!gameOver) requestAnimationFrame( animate );
 
-	
 }
 
 function render() {

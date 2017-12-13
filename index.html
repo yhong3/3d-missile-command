@@ -10,17 +10,17 @@
 	</head>
 
 	<body>
-		<div id="debug">
+	       
+        <div id="debug">
 			<p id="mousePosition"></p>
 			<p id="cumulatedFrameTime"></p>
+            <p id="points">Points: 0</p>
 		</div>
 		
-		<div id="points">
-		Point: 0
-		</div>
 
         <audio id="audio_shoot" src="sounds/shoot.wav" preload="auto"></audio>
         <audio id="audio_explosion" src="sounds/explosion.wav" preload="auto"></audio>
+        <audio id="audio_doomed" src="sounds/doomed.wav" preload="auto"></audio>
         <audio id="audio_gamestart" src="sounds/gamestart.wav" preload="auto"></audio>
 		
         <script src="build/three.js"></script>
@@ -28,8 +28,6 @@
 		<script src="examples/js/Detector.js"></script>
 		<script src="examples/js/libs/stats.min.js"></script>
 		<script src="examples/js/GPUParticleSystem.js"></script>
-
-
 
 		<script src="MissileCommand.js"></script>
 
